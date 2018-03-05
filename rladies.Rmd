@@ -1,0 +1,100 @@
+---
+title: "Rladies"
+author: "SedaJapp"
+date: "2/28/2018"
+output: html_document
+---
+
+Let's start the clock to time the R code.
+```{r}
+ptm <- proc.time()
+```
+
+Read the data.
+```{r}
+train_data <- read.csv("/Users/sedacavdaroglu/Desktop/DATS_Final-master/train_housing.csv")
+test_data <- read.csv("/Users/sedacavdaroglu/Desktop/DATS_Final-master/test_housing.csv")
+```
+
+Let's check the first 10 rows of the data to get an idea
+```{r}
+head(train_data,n=10)
+```
+
+
+Let's visualize the relationship between selling price and 
+other numerical variables with a heatmap.
+```{r}
+num_data <- data.matrix(train_data[c('saleprice','lot.frontage','lot.area','full.bath','bedroom.abvgr','yr.sold')])
+cormat <- round(cor(num_data),2)
+
+
+library(reshape2)
+melted_cormat <- melt(cormat) #reduce the correlation to only DV and IV (get rid off corr. between all IVs)
+
+
+library(ggplot2)
+ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile()
+
+```
+
+Now, let's do some regression analysis
+```{r}
+library(glmnet)
+dv <- train_data$saleprice
+lambda <- 10^seq(10, -2, length = 100)
+cv.out <- cv.glmnet(subset(num_data, select = -c(1)), data.matrix(dv), alpha = 0)
+bestlam <- cv.out$lambda.min
+
+lasso.mod <- glmnet(subset(num_data, select = -c(1),standardize=F), data.matrix(dv), alpha = 1, lambda = lambda)
+lasso.pred <- predict(lasso.mod, s = bestlam, newx = subset(num_data, select = -c(1) ))
+```
+
+Let's check the coefficients to see which parameters lasso picked.
+```{r}
+lasso.coef  <- predict(lasso.mod, type = 'coefficients', s = bestlam)[1:6,]
+lasso.coef
+#visualization
+library(plotmo) # for plot_glmnet
+plot_glmnet(lasso.mod)                             # default colors
+plot_glmnet(lasso.mod, label=5)                    # label the 5 biggest final coefs
+```
+
+Let's try the machine learning package caret to do some simple knn.
+```{r}
+require(caret)
+```
+
+Let's pick a more intuitive dataset for knn.
+```{r}
+data(iris)
+```
+
+Split the data into training and test sets.
+```{r}
+set.seed(3033)
+indxtrain <- createDataPartition(y = iris$Species, p= 0.7, list = FALSE)
+df_train <- iris[indxtrain,]
+df_test <- iris[-indxtrain,]
+```
+
+Let's do the kn with 10 cross validations.
+```{r}
+trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+set.seed(3333)
+knn_fit <- train(Species ~., data = df_train, method = "knn",
+                 trControl=trctrl,
+                 preProcess = c("center", "scale"),
+                 tuneLength = 10)
+```
+
+Let's check the accuracies.
+```{r}
+knn_fit
+```
+
+How long does this all take?
+```{r}
+proc.time() - ptm
+```
