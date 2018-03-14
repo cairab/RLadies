@@ -42,13 +42,22 @@ ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) +
 Now, let's do some regression analysis
 ```{r}
 library(glmnet)
-dv <- train_data$saleprice
+x <- model.matrix(saleprice~., as.data.frame(num_data))[,-1]
+y <- as.data.frame(num_data)$saleprice
 lambda <- 10^seq(10, -2, length = 100)
-cv.out <- cv.glmnet(subset(num_data, select = -c(1)), data.matrix(dv), alpha = 0)
+
+#split the data into 2/3 training & 1/3 test
+set.seed(489)
+train = sample(1:nrow(num_data), .66*nrow(num_data))
+test = (-train)
+ytest = y[test]
+
+cv.out <- cv.glmnet(x[train,], y[train], alpha = 1)
 bestlam <- cv.out$lambda.min
 
-lasso.mod <- glmnet(subset(num_data, select = -c(1),standardize=F), data.matrix(dv), alpha = 1, lambda = lambda)
-lasso.pred <- predict(lasso.mod, s = bestlam, newx = subset(num_data, select = -c(1) ))
+
+lasso.mod <- glmnet(x[train,], y[train], alpha = 1, lambda = lambda)
+lasso.pred <- predict(lasso.mod, s = bestlam, newx = x[test,])
 ```
 
 Let's check the coefficients to see which parameters lasso picked.
